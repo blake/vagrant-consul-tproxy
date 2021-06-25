@@ -1,0 +1,5 @@
+---
+collections:
+  - name: https://github.com/blake/ansible-collection-consul.git
+    type: git
+    version: v0.1.0
