@@ -1,6 +1,6 @@
 source "vagrant" "ubuntu_20_04" {
-  source_path = "bento/ubuntu-20.04"
-  box_version = "202105.25.0"
+  source_path = "ubuntu/focal64"
+  box_version = "20210622.0.0"
   communicator = "ssh"
   provider = "virtualbox"
 

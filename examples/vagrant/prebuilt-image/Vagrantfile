@@ -20,7 +20,7 @@ Vagrant.configure(VAGRANT_CONFIGURATION_VERSION) do |config|
   counting_server_vip = "203.0.113.20"
 
   config.vm.box = "blakec/ubuntu-20.04-consul-transparent-proxy"
-  config.vm.box_version = "0.1.1"
+  config.vm.box_version = "0.1.2"
 
   # Define a basic Consul config which sets bind, advertise, and retry join
   # addresses
