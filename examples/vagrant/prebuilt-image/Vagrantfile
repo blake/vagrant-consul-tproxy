@@ -17,6 +17,7 @@ Vagrant.configure(VAGRANT_CONFIGURATION_VERSION) do |config|
   consul_server_ip = "192.0.2.254"
   dashboard_server_ip = "192.0.2.10"
   counting_server_ip = "192.0.2.20"
+  counting_server_vip = "203.0.113.20"
 
   config.vm.box = "blakec/ubuntu-20.04-consul-transparent-proxy"
   config.vm.box_version = "0.1.1"
@@ -99,7 +100,7 @@ Vagrant.configure(VAGRANT_CONFIGURATION_VERSION) do |config|
 
               [Service]
               Type=simple
-              Environment="COUNTING_SERVICE_URL=http://counting.service.consul"
+              Environment="COUNTING_SERVICE_URL=http://#{counting_server_vip}"
               ExecStart=/usr/local/bin/dashboard-service
               Restart=on-failure
               RestartSec=5
@@ -139,6 +140,7 @@ Vagrant.configure(VAGRANT_CONFIGURATION_VERSION) do |config|
         "consul.hashicorp.com/connect-service-port": "80",
         "consul.hashicorp.com/service-tags": "counting,nonprod",
         "consul.hashicorp.com/service-meta-environment": "dmz",
+        "alpha.consul.hashicorp.com/virtual-ip": counting_server_vip,
       }
     }
     machine = configureConsulServiceConfig(vmCfg: machine, config: service_config)

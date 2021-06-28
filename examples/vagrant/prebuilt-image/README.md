@@ -35,6 +35,8 @@ supported annotations are optional.
 
 #### Supported annotations
 
+##### Official annotations
+
 For full descriptions and examples of using each annotation, see
 <https://www.consul.io/docs/k8s/connect#available-annotations>.
 
@@ -48,6 +50,14 @@ For full descriptions and examples of using each annotation, see
 * `consul.hashicorp.com/transparent-proxy-exclude-outbound-cidrs`
 * `consul.hashicorp.com/transparent-proxy-exclude-outbound-ports`
 * `consul.hashicorp.com/transparent-proxy-exclude-uids`
+
+##### Custom annotations
+
+Custom annotations are also supported which provide additional functionality
+that is not implemented officially in Consul. These annotations are tagged with
+the `alpha` prefix as they are considered unstable, and subject to change/removal.
+
+* `alpha.consul.hashicorp.com/virtual-ip`: Configures a `virtual` tagged address on the sidecar service.
 
 ## Starting the environment
 
