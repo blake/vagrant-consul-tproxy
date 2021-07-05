@@ -1,0 +1,35 @@
+[Unit]
+Description=Named network namespace %I
+After=syslog.target network.target systemd-netns@%i.service
+Before=%i.service
+BindsTo=systemd-netns@%i.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=true
+
+# Create a macvlan link named 'mv-int' on the physical device 'enp0s8' which
+# bridges traffic between all attached endpoints.
+ExecStartPre=-/usr/bin/env ip link add mv-int link enp0s8 type macvlan mode bridge
+ExecStartPre=-/usr/bin/env ip link set mv-int up
+ExecStartPre=-/usr/bin/env sysctl -w net.ipv4.ip_forward=1
+
+# Create an interface named mv0 which is attached to the mv-int device, and which
+# also operates in bridge mode.
+# Move this device into the specified namespace, assigning a name also of 'mv0'
+ExecStart=/usr/bin/env ip link add mv0 link mv-int type macvlan mode bridge
+ExecStart=/usr/bin/env ip link set mv0 netns %i name mv0
+
+# Bring up the loopback and mv0 interfaces within the network namespace.
+# Optionally run the /usr/local/bin/ns-<service> script if it exists. This script
+# assigns an IP address to the mv0 interface, and enables other namespace-specific
+# sysctl settings.
+ExecStart=-/usr/bin/env ip netns exec %i ip link set lo up
+ExecStart=-/usr/bin/env ip netns exec %i ip link set dev mv0 up
+ExecStart=-/usr/bin/bash -c "if [[ -e "/usr/local/bin/ns-%i" ]]; then /usr/local/bin/ns-%i start; fi"
+
+ExecStop=/usr/bin/bash -c "if [[ -e "/usr/local/bin/ns-%i" ]]; then bash /usr/local/bin/ns-%i stop; fi"
+
+[Install]
+WantedBy=multi-user.target
+WantedBy=network-online.target
