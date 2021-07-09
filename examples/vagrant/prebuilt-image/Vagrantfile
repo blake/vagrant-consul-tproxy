@@ -14,10 +14,21 @@ merge_how:
 EOF
 
 Vagrant.configure(VAGRANT_CONFIGURATION_VERSION) do |config|
-  consul_server_ip = "192.0.2.254"
-  dashboard_server_ip = "192.0.2.10"
-  counting_server_ip = "192.0.2.20"
-  counting_server_vip = "203.0.113.20"
+
+  # Static IPs assigned to the virtual machines
+  machine_ips = {
+    "consul-server" => "192.0.2.254",
+    "web"           => "192.0.2.10",
+    "api1"          => "192.0.2.20",
+    "api2"          => "192.0.2.21",
+    "api3"          => "192.0.2.22",
+  }
+
+  # Virtual IPs assigned to logical services
+  virtual_ips = {
+    "web" => "203.0.113.10",
+    "api" => "203.0.113.20",
+  }
 
   config.vm.box = "blakec/ubuntu-20.04-consul-transparent-proxy"
   config.vm.box_version = "0.1.2"
@@ -26,6 +37,8 @@ Vagrant.configure(VAGRANT_CONFIGURATION_VERSION) do |config|
   # addresses
   config.vm.cloud_init :user_data, content_type: "text/cloud-config",
       inline: CLOUD_CONFIG_MERGE_SNIPPET + <<~EOF
+        bootcmd:
+          - "rm /etc/apt/sources.list.d/dl_bintray_com_tetrate_getenvoy_deb.list"
         write_files:
           - path: /etc/consul.d/vagrant-config.hcl
             permissions: '0640'
@@ -34,14 +47,14 @@ Vagrant.configure(VAGRANT_CONFIGURATION_VERSION) do |config|
               bind_addr = "{{ GetAllInterfaces | include \\"rfc\\" \\"5735\\" | attr \\"address\\" }}"
               advertise_addr = "{{ GetAllInterfaces | include \\"rfc\\" \\"5735\\" | attr \\"address\\" }}"
 
-              retry_join = ["#{consul_server_ip}"]
+              retry_join = ["#{machine_ips['consul-server']}"]
 
       EOF
 
   # Provision a single-node Consul server cluster
   config.vm.define "consul-server" do |machine|
     machine.vm.hostname = "consul"
-    machine.vm.network "private_network", ip: consul_server_ip
+    machine.vm.network "private_network", ip: machine_ips["consul-server"]
 
     # Forward port 8500 to this server
     machine.vm.network "forwarded_port", guest: 8500, host: 8500
@@ -71,116 +84,76 @@ Vagrant.configure(VAGRANT_CONFIGURATION_VERSION) do |config|
   end
 
   # Create a client machine with has a sidecar proxy
-  config.vm.define "dashboard" do |machine|
-    machine.vm.hostname = "dashboard"
-    machine.vm.network "private_network", ip: dashboard_server_ip
+  config.vm.define "web", autostart: false do |machine|
+    machine.vm.hostname = "web"
+    machine.vm.network "private_network", ip: machine_ips["web"]
+
+    # Forward port 9090 to this server
+    machine.vm.network "forwarded_port", guest: 9090, host: 9090
 
     service_config = {
       annotations: {
         "consul.hashicorp.com/connect-service": machine.vm.hostname,
         "consul.hashicorp.com/transparent-proxy": true,
-        "consul.hashicorp.com/transparent-proxy-exclude-inbound-ports": 22,
+        "consul.hashicorp.com/transparent-proxy-exclude-inbound-ports": "22,9090",
 
-        "consul.hashicorp.com/service-tags": "dashboard,nonprod",
+        "consul.hashicorp.com/service-tags": "web,nonprod",
         "consul.hashicorp.com/service-meta-environment": "test",
       }
     }
 
     machine = configureConsulServiceConfig(vmCfg: machine, config: service_config)
 
-    # Include custom configuration to install the dashboard service
+    machine = install_fake_service(vmCfg: machine)
+
+    # Include custom configuration for fake service
     machine.vm.cloud_init :user_data, content_type: "text/cloud-config",
       inline: CLOUD_CONFIG_MERGE_SNIPPET + <<~EOF
         write_files:
-          - path: /etc/systemd/system/dashboard.service
+          - path: /srv/consul/fake-service.env
             permissions: '0640'
             content: |
-              [Unit]
-              Description=Dashboard service
-
-              [Service]
-              Type=simple
-              Environment="COUNTING_SERVICE_URL=http://#{counting_server_vip}"
-              ExecStart=/usr/local/bin/dashboard-service
-              Restart=on-failure
-              RestartSec=5
-
-              [Install]
-              WantedBy=multi-user.target
-          - path: /tmp/install-dashboard.sh
-            permissions: '0750'
-            content: |
-              #!/usr/bin/env bash
-              cd /tmp
-              wget https://github.com/hashicorp/demo-consul-101/releases/download/0.0.3.1/dashboard-service_linux_amd64.zip
-              unzip dashboard-service_linux_amd64.zip -d /usr/local/bin/
-
-              cd /usr/local/bin
-              mv dashboard-service_linux_amd64 dashboard-service
-              chmod +x dashboard-service
-        packages:
-          - unzip
-        runcmd:
-          - /tmp/install-dashboard.sh
-          - systemctl enable dashboard.service
-          - systemctl start dashboard.service
-      EOF
+              NAME="Web"
+              MESSAGE="I am a web server. *Beep boop bop*"
+              UPSTREAM_URIS="http://#{virtual_ips['api']}"
+        EOF
   end
 
-  # Create a client machine which registers a service running on port 80
-  config.vm.define "counting" do |machine|
-    machine.vm.hostname = "counting"
-    machine.vm.network "private_network", ip: counting_server_ip
-    service_config = {
-      annotations: {
-        "consul.hashicorp.com/connect-service": machine.vm.hostname,
-        "consul.hashicorp.com/transparent-proxy": true,
-        "consul.hashicorp.com/transparent-proxy-exclude-inbound-ports": 22,
+  # Create a client machine which registers a service running on port 9090
+  (1..3).each do |i|
+    config.vm.define "api#{i}", autostart: false do |machine|
+      machine.vm.hostname = "api#{i}"
+      machine.vm.network "private_network", ip: machine_ips["api#{i}"]
+      service_config = {
+        annotations: {
+          "consul.hashicorp.com/connect-service": "api",
+          "consul.hashicorp.com/transparent-proxy": true,
+          "consul.hashicorp.com/transparent-proxy-exclude-inbound-ports": 22,
 
-        "consul.hashicorp.com/connect-service-port": "80",
-        "consul.hashicorp.com/service-tags": "counting,nonprod",
-        "consul.hashicorp.com/service-meta-environment": "dmz",
-        "alpha.consul.hashicorp.com/virtual-ip": counting_server_vip,
+          "consul.hashicorp.com/connect-service-port": "9090",
+          "consul.hashicorp.com/service-tags": "api#{i},nonprod",
+          "consul.hashicorp.com/service-meta-version": "v#{i}",
+          "consul.hashicorp.com/service-meta-environment": "test",
+
+          "alpha.consul.hashicorp.com/virtual-ip": virtual_ips['api'],
+        }
       }
-    }
-    machine = configureConsulServiceConfig(vmCfg: machine, config: service_config)
+      machine = configureConsulServiceConfig(vmCfg: machine, config: service_config)
 
-    # Include custom configuration to install the counting service
-    machine.vm.cloud_init :user_data, content_type: "text/cloud-config",
-      inline: CLOUD_CONFIG_MERGE_SNIPPET + <<~EOF
-        write_files:
-          - path: /etc/systemd/system/counting.service
-            permissions: '0640'
-            content: |
-              [Unit]
-              Description=Counting service
+      machine = install_fake_service(vmCfg: machine)
 
-              [Service]
-              Type=simple
-              ExecStart=/usr/local/bin/counting-service
-              Restart=on-failure
-              RestartSec=5
-
-              [Install]
-              WantedBy=multi-user.target
-          - path: /tmp/install-counting.sh
-            permissions: '0750'
-            content: |
-              #!/usr/bin/env bash
-              cd /tmp
-              wget https://github.com/hashicorp/demo-consul-101/releases/download/0.0.3.1/counting-service_linux_amd64.zip
-              unzip counting-service_linux_amd64.zip -d /usr/local/bin/
-
-              cd /usr/local/bin
-              mv counting-service_linux_amd64 counting-service
-              chmod +x counting-service
-        packages:
-          - unzip
-        runcmd:
-          - /tmp/install-counting.sh
-          - systemctl enable counting.service
-          - systemctl start counting.service
-        EOF
+      # Include custom configuration for fake service
+      machine.vm.cloud_init :user_data, content_type: "text/cloud-config",
+        inline: CLOUD_CONFIG_MERGE_SNIPPET + <<~EOF
+          write_files:
+            - path: /srv/consul/fake-service.env
+              permissions: '0640'
+              content: |
+                NAME="API #{i}"
+                MESSAGE="Greetings from API server #{i}!"
+                ERROR_RATE=#{(i.to_f * 10) / 100 % 0.3}
+          EOF
+    end
   end
 end
 
@@ -204,4 +177,43 @@ def configureConsulServiceConfig(vmCfg:, config:)
       inline: CLOUD_CONFIG_MERGE_SNIPPET + yaml_config.to_yaml.sub("---", "")
 
       return vmCfg
+end
+
+# Install fake-service on the virtual machine
+def install_fake_service(vmCfg:)
+    vmCfg.vm.cloud_init :user_data, content_type: "text/cloud-config",
+      inline: CLOUD_CONFIG_MERGE_SNIPPET + <<~EOF
+        write_files:
+          - path: /etc/systemd/system/fake-service.service
+            permissions: '0640'
+            content: |
+              [Unit]
+              Description=Fake service
+
+              [Service]
+              Type=simple
+              EnvironmentFile=/srv/consul/fake-service.env
+              ExecStart=/usr/local/bin/fake-service
+              Restart=on-failure
+              RestartSec=5
+
+              [Install]
+              WantedBy=multi-user.target
+          - path: /tmp/install-fake-service.sh
+            permissions: '0750'
+            content: |
+              #!/usr/bin/env bash
+              cd /tmp
+              wget https://github.com/nicholasjackson/fake-service/releases/download/v0.22.7/fake_service_linux_amd64.zip
+              unzip fake_service_linux_amd64.zip -d /usr/local/bin/
+              chmod +x /usr/local/bin/fake-service
+        packages:
+          - unzip
+        runcmd:
+          - /tmp/install-fake-service.sh
+          - systemctl enable fake-service.service
+          - systemctl start fake-service.service
+      EOF
+
+    return vmCfg
 end

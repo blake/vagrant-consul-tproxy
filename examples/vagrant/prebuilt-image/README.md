@@ -11,8 +11,10 @@ pre-installed into the image.
 |Machine Name|Description|IP|Guest Port|Host Port|
 |----|----|----|----|---|
 |consul-server|Consul server agent|192.0.2.254|8500|8500|
-|dashboard|Consul client running "dashboard" service|192.0.2.10|80|n\a|
-|counting|Consul client running "counting" service|192.0.2.20|80|n\a|
+|web|Consul client running "fake-service" service|192.0.2.10|9090|9090|
+|api1|Consul client running "fake-service" service|192.0.2.20|9090|n\a|
+|api2|Consul client running "fake-service" service|192.0.2.21|9090|n\a|
+|api3|Consul client running "fake-service" service|192.0.2.22|9090|n\a|
 
 For each client, Vagrant configures the advertised service name and port in
 Consul by by placing a JSON file at `/srv/consul/service-config.json` with the following syntax.
@@ -20,8 +22,9 @@ Consul by by placing a JSON file at `/srv/consul/service-config.json` with the f
 ```json
 {
   "annotations": {
-    "consul.hashicorp.com/connect-service": "counting",
-    "consul.hashicorp.com/connect-service-port": "80",
+    "consul.hashicorp.com/connect-service": "api",
+    "consul.hashicorp.com/connect-service-port": "9090",
+    "consul.hashicorp.com/transparent-proxy": true
   }
 }
 ```
@@ -82,32 +85,7 @@ vagrant ssh <machine name>
 Vagrant is configured with a port forwarding rule to expose the Consul server
 UI on <http://localhost:8500>.
 
-### Dashboard UI
+### Web UI
 
-A little extra work is needed to access the UI of the dashboard service. This is
-because the iptables rules that are installed by Consul within the VM do not
-permit direct access to any of the services running on the host.
-
-*Note: The exception is SSH, which was configured as an inbound port exclusion
-for both the dashboard and counting services by through the
-`consul.hashicorp.com/transparent-proxy-exclude-inbound-ports` annotation.*
-
-1. To access the dashboard UI, run the following command to obtain the OpenSSH
-configuration required for connecting to the machine.
-
-    ```shell
-    vagrant ssh-config dashboard > dashboard-ssh-config
-    ```
-
-1. Next, use `ssh` to bind a local listener on port 8080 which forwards connections
-through the `dashboard` host to the specified destination of `localhost:80`,
-which is the address where the `dashboard` service is listening.
-
-    ```shell
-    ssh -NF dashboard-ssh-config -L 8080:localhost:80 dashboard
-    ```
-
-    *Note: This command only instructs SSH to forward ports, not initiate a login
-    session. The terminal will appear stuck, but forwarding is working.*
-
-1. Access the dashboard UI at <http://localhost:8080>.
+Vagrant is configured with a port forwarding rule to expose the Web server
+UI on <http://localhost:9090>.
