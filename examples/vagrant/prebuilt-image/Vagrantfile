@@ -30,8 +30,6 @@ Vagrant.configure(VAGRANT_CONFIGURATION_VERSION) do |config|
   # addresses
   config.vm.cloud_init :user_data, content_type: "text/cloud-config",
       inline: CLOUD_CONFIG_MERGE_SNIPPET + <<~EOF
-        bootcmd:
-          - "rm /etc/apt/sources.list.d/dl_bintray_com_tetrate_getenvoy_deb.list"
         write_files:
           - path: /etc/consul.d/vagrant-config.hcl
             permissions: '0640'
