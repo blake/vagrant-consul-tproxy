@@ -24,12 +24,6 @@ Vagrant.configure(VAGRANT_CONFIGURATION_VERSION) do |config|
     "api3"          => "192.168.56.22",
   }
 
-  # Virtual IPs assigned to logical services
-  virtual_ips = {
-    "web" => "203.0.113.10",
-    "api" => "203.0.113.20",
-  }
-
   config.vm.box = "blakec/ubuntu-22.04-consul-transparent-proxy"
 
   # Define a basic Consul config which sets bind, advertise, and retry join
@@ -115,7 +109,7 @@ Vagrant.configure(VAGRANT_CONFIGURATION_VERSION) do |config|
             content: |
               NAME="Web"
               MESSAGE="I am a web server. *Beep boop bop*"
-              UPSTREAM_URIS="http://#{virtual_ips['api']}"
+              UPSTREAM_URIS="http://api.virtual.consul"
         EOF
   end
 
@@ -134,8 +128,6 @@ Vagrant.configure(VAGRANT_CONFIGURATION_VERSION) do |config|
           "consul.hashicorp.com/service-tags": "api#{i},nonprod",
           "consul.hashicorp.com/service-meta-version": "v#{i}",
           "consul.hashicorp.com/service-meta-environment": "test",
-
-          "alpha.consul.hashicorp.com/virtual-ip": virtual_ips['api'],
         }
       }
       machine = configureConsulServiceConfig(vmCfg: machine, config: service_config)
