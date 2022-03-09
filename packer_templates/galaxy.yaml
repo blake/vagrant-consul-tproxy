@@ -2,4 +2,4 @@
 collections:
   - name: https://github.com/blake/ansible-collection-consul.git
     type: git
-    version: 220165b
+    version: 25ae328
