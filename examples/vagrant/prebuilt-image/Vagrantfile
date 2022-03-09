@@ -194,7 +194,7 @@ def install_fake_service(vmCfg:)
             content: |
               #!/usr/bin/env bash
               cd /tmp
-              wget https://github.com/nicholasjackson/fake-service/releases/download/v0.22.7/fake_service_linux_amd64.zip
+              wget https://github.com/nicholasjackson/fake-service/releases/download/v0.23.1/fake_service_linux_amd64.zip
               unzip fake_service_linux_amd64.zip -d /usr/local/bin/
               chmod +x /usr/local/bin/fake-service
         packages:
