@@ -1,0 +1,77 @@
+- hosts: all
+  become: yes
+  handlers:
+    - name: systemd daemon_reload
+      systemd:
+        daemon_reload: true
+    - name: restart haproxy
+      service:
+        name: haproxy
+        state: restarted
+    - name: restart consul
+      service:
+        name: consul
+        state: restarted
+  tasks:
+    - name: Disable IPv6 for APT
+      copy:
+        content: "Acquire::ForceIPv4 \"true\";\n"
+        dest: "/etc/apt/apt.conf.d/99force-ipv4"
+
+    - name: Copy systemd unit files
+      copy:
+        src: "files/{{ item.src }}"
+        dest: "{{ item.dest }}"
+      loop:
+        - src: "systemd-netns@.service"
+          dest: "/etc/systemd/system/systemd-netns@.service"
+        - src: "systemd-netns-access@.service"
+          dest: "/etc/systemd/system/systemd-netns-access@.service"
+      notify:
+        - systemd daemon_reload
+
+    - name: Install HAProxy
+      package:
+        name: haproxy
+        state: present
+
+    - name: Create /etc/systemd/system/haproxy.service.d
+      file:
+        path: /etc/systemd/system/haproxy.service.d
+        state: directory
+
+    - name: Copy HAProxy drop-in
+      copy:
+        src: "systemd-dropin@.service"
+        dest: "/etc/systemd/system/haproxy.service.d/haproxy.conf"
+      notify:
+        - systemd daemon_reload
+
+    - name: Copy HAProxy namespace setup helper
+      copy:
+        src: "files/netns-setup-helper.sh"
+        dest: "/usr/local/bin/ns-haproxy"
+        mode: "u=rwx,g=r,o=r"
+      notify: restart haproxy
+
+    - name: Create /run/consul/
+      file:
+        path: /run/consul
+        state: directory
+        owner: consul
+        group: consul
+
+    - name: Configure Consul to listen on Unix sockets
+      copy:
+        content: |
+          addresses {
+            http = "127.0.0.1 unix:///run/consul/http.socket"
+            grpc = "127.0.0.1 unix:///run/consul/grpc.socket"
+          }
+
+          unix_sockets {
+            mode = "0666"
+          }
+        dest: "/etc/consul.d/unix-socket-listeners.hcl"
+      notify: restart consul
+
