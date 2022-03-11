@@ -4,7 +4,7 @@
 # unit is stopped when any of the units listed suddenly disappears. Units can
 # suddenly, unexpectedly disappear if a service terminates on its own choice, a
 # device is unplugged or a mount point unmounted without involvement of systemd.
-BindsTo=systemd-netns@haproxy.service
+BindsTo=systemd-netns@{{ item }}.service
 
 # JoinsNamespaceOf= For units that start processes (such as service units),
 # lists one or more other units whose network and/or temporary file namespace to
@@ -16,8 +16,9 @@ BindsTo=systemd-netns@haproxy.service
 # that this setting only has an effect if PrivateNetwork= and/or PrivateTmp= is
 # enabled for both the unit that joins the namespace and the unit whose
 # namespace is joined.
-JoinsNamespaceOf=systemd-netns@haproxy.service
-After=systemd-netns@haproxy.service
+JoinsNamespaceOf=systemd-netns@{{ item }}.service
+After=systemd-netns@{{ item }}.service
+Wants=envoy@{{ item }}.service
 
 [Service]
 CPUAccounting = true
@@ -26,4 +27,4 @@ MemoryAccounting = true
 TasksAccounting = true
 PrivateNetwork = true
 PrivateTmp = true
-Slice = haproxy.slice
+Slice = {{ item }}.slice
