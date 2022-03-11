@@ -83,6 +83,10 @@ Vagrant.configure(VAGRANT_CONFIGURATION_VERSION) do |config|
     # Forward port 9090 to this server
     machine.vm.network "forwarded_port", guest: 9090, host: 9090
 
+    machine.vm.provision :ansible do |ansible|
+      ansible.playbook = "provision-playbook.yaml"
+    end
+
     service_config = {
       annotations: {
         "consul.hashicorp.com/connect-service": machine.vm.hostname,

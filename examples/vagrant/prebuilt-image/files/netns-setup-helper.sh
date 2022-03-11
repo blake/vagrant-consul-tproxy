@@ -58,8 +58,7 @@ function start {
   # 		 -1 (for point-to-point devices and loopback devices)
   /usr/bin/env ip netns exec haproxy sysctl -w net.ipv4.conf.mv0.use_tempaddr=0
 
-  /usr/bin/env ip netns exec haproxy ip address add 172.16.26.1/22 dev mv0
-  /usr/bin/env ip netns exec haproxy ip address add 172.16.26.2/22 dev mv0
+  /usr/bin/env ip netns exec haproxy ip address add 192.168.56.2/24 dev mv0
 
   # Add a route in the main routing table which allows the host to route packets
   # to IPs assigned to this interface.
@@ -68,13 +67,11 @@ function start {
   # Route types:
   #   local - the destinations are assigned to this host.
   #   The packets are looped back and delivered locally.
-  /usr/bin/env ip route add 172.16.26.1/32 dev mv-int metric 100 table local
-  /usr/bin/env ip route add 172.16.26.2/32 dev mv-int metric 100 table local
+  /usr/bin/env ip route add 192.168.56.2/32 dev enp0s8 metric 100 table local
 }
 
 function stop {
-  /usr/bin/env ip route del 172.16.26.1/32 dev mv-int metric 100 table local
-  /usr/bin/env ip route del 172.16.26.2/32 dev mv-int metric 100 table local
+  /usr/bin/env ip route del 192.168.56.2/32 dev enp0s8 metric 100 table local
 }
 
 case "$1" in
