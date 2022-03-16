@@ -40,13 +40,6 @@
         path: /etc/systemd/system/haproxy.service.d
         state: directory
 
-    - name: Copy HAProxy drop-in
-      copy:
-        src: "systemd-dropin@.service"
-        dest: "/etc/systemd/system/haproxy.service.d/haproxy.conf"
-      notify:
-        - systemd daemon_reload
-
     - name: Copy HAProxy namespace setup helper
       copy:
         src: "files/netns-setup-helper.sh"
@@ -75,3 +68,21 @@
         dest: "/etc/consul.d/unix-socket-listeners.hcl"
       notify: restart consul
 
+    - name: Configure drop-in units for namespaced applications
+      block:
+        - name: Create directory for systemd drop-in
+          file:
+            state: directory
+            path: "/etc/systemd/system/{{ item }}.service.d"
+          loop:
+            - fake
+            - haproxy
+
+        - name: Configure drop-in configuration
+          template:
+            src: "files/systemd-dropin@.service"
+            dest: "/etc/systemd/system/{{ item }}.service.d/{{ item }}.conf"
+          notify: systemd daemon_reload
+          loop:
+            - fake
+            - haproxy
