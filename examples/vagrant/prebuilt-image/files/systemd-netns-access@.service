@@ -8,21 +8,10 @@ BindsTo=systemd-netns@%i.service
 Type=oneshot
 RemainAfterExit=true
 
-# Create an interface named mv0 which is attached to the external interface, and which
-# also operates in l2 mode.
-# Move this device into the specified namespace, assigning a name of 'mv0'
-ExecStart=/usr/bin/env ip link add mv0 link enp0s8 type ipvlan mode l2
-ExecStart=/usr/bin/env ip link set mv0 netns %i name mv0
+ExecStart=/usr/bin/env cnitool-helper add %i
+# ExecStart=/usr/bin/env cnitool-helper check envoynetwork /var/run/netns/%i
 
-# Bring up the loopback and mv0 interfaces within the network namespace.
-# Optionally run the /usr/local/bin/ns-<service> script if it exists. This script
-# assigns an IP address to the mv0 interface, and enables other namespace-specific
-# sysctl settings.
-ExecStart=-/usr/bin/env ip netns exec %i ip link set lo up
-ExecStart=-/usr/bin/env ip netns exec %i ip link set dev mv0 up
-ExecStart=-/usr/bin/bash -c "if [[ -e "/usr/local/bin/ns-%i" ]]; then /usr/local/bin/ns-%i start; fi"
-
-ExecStop=/usr/bin/bash -c "if [[ -e "/usr/local/bin/ns-%i" ]]; then bash /usr/local/bin/ns-%i stop; fi"
+ExecStop=-/usr/bin/env cnitool-helper del %i
 
 [Install]
 WantedBy=multi-user.target

@@ -40,13 +40,6 @@
         path: /etc/systemd/system/haproxy.service.d
         state: directory
 
-    - name: Copy HAProxy namespace setup helper
-      copy:
-        src: "files/netns-setup-helper.sh"
-        dest: "/usr/local/bin/ns-haproxy"
-        mode: "u=rwx,g=r,o=r"
-      notify: restart haproxy
-
     - name: Create /run/consul/
       file:
         path: /run/consul
@@ -86,3 +79,24 @@
           loop:
             - fake
             - haproxy
+
+    - name: Create CNI directories
+      file:
+        state: directory
+        path: "{{ item }}"
+      loop:
+        - /opt/cni
+        - /etc/cni/net.d
+
+    - name: Copy CNI conf list
+      copy:
+        src: "files/{{ item }}"
+        dest: "/etc/cni/net.d/{{ item }}"
+      loop:
+        - 10-envoynetwork.conflist
+
+    - name: Copy cnitool-helper
+      copy:
+        src: files/cnitool-helper.sh
+        dest: /usr/local/sbin/cnitool-helper
+        mode: "u=rwx,g=r"
