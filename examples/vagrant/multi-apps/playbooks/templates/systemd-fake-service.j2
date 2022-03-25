@@ -1,0 +1,12 @@
+[Unit]
+Description={{ item }} service
+
+[Service]
+Type=simple
+EnvironmentFile=/srv/apps/{{ item }}.env
+ExecStart=/usr/local/bin/fake-service
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

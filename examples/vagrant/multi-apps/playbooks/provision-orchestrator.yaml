@@ -1,0 +1,57 @@
+- hosts: all
+  become: true
+  collections:
+    - blake.consul
+  pre_tasks:
+    - name: Update APT mirrors
+      apt:
+        update_cache: yes
+  roles:
+    - role: geerlingguy.docker
+    - role: brianshumate.nomad
+      vars:
+        nomad_cni_enable: true
+        nomad_config_custom:
+          addresses:
+            http: !unsafe "127.0.0.1 {{ GetInterfaceIP \"enp0s3\" }} {{ GetInterfaceIP \"enp0s8\" }}"
+        nomad_docker_enable: true
+        nomad_group_name: all
+        nomad_iface: enp0s8
+        nomad_network_interface: enp0s8
+        nomad_node_role: both
+        nomad_plugins:
+          docker:
+            config:
+              gc:
+                image: false
+                image_delay: 24h
+          exec:
+            config:
+              allow_caps: ["all"]
+        nomad_use_consul: true
+        nomad_servers:
+          - "{{ inventory_hostname }}"
+        nomad_version: 1.2.6
+  tasks:
+    - name: Refresh facts
+      ansible.builtin.setup:
+
+    - name: Import transparent proxy role
+      import_role:
+        name: transparent_proxy
+      vars:
+        dummy_interface_enable: false
+        # Additional IP addresses for systemd-resolved to bind to
+        dns_stub_listener_ip: "{{ ansible_docker0.ipv4.address }}"
+
+        # Consul mesh default configuration variables (see mesh.json)
+        consul_mesh_config:
+            network: envoynetwork
+            dns_ip: "{{ ansible_docker0.ipv4.address }}"
+  post_tasks:
+    - name: Change PROXY_UID in /usr/local/sbin/consul-redirect-traffic
+      ansible.builtin.lineinfile:
+        path: /usr/local/sbin/consul-redirect-traffic
+        line: "PROXY_UID=101"
+        state: present
+        regexp: '^PROXY_UID='

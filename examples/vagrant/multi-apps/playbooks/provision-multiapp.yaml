@@ -1,0 +1,132 @@
+- hosts: all
+  become: true
+  handlers:
+    - name: systemd daemon_reload
+      systemd:
+        daemon_reload: true
+    - name: restart haproxy
+      service:
+        name: haproxy
+        state: restarted
+    - name: restart consul
+      service:
+        name: consul
+        state: restarted
+  collections:
+    - blake.consul
+  roles:
+    - role: alvistack.containernetworking_plugins
+  tasks:
+    - name: Import transparent proxy role
+      import_role:
+        name: transparent_proxy
+
+    - name: Create /srv/consul/run
+      file:
+        path: /srv/consul/run
+        state: directory
+        owner: consul
+        group: consul
+        mode: u=rwx,g=rx,o=x
+
+    - name: Configure Consul to listen on Unix sockets
+      copy:
+        content: |
+          addresses {
+            http = "127.0.0.1 unix:///srv/consul/run/http.socket"
+            grpc = "127.0.0.1 unix:///srv/consul/run/grpc.socket"
+          }
+
+          unix_sockets {
+            mode = "0666"
+          }
+        dest: "/etc/consul.d/unix-socket-listeners.hcl"
+      notify: restart consul
+
+    - name: Copy CNI conf list
+      copy:
+        src: "{{ item }}"
+        dest: "/etc/cni/net.d/{{ item }}"
+      loop:
+        - 10-envoynetwork.conflist
+
+    - name: "Copy {{ item.src }} to /usr/local/sbin/"
+      copy:
+        src: "{{ item.src }}"
+        dest: "/usr/local/sbin/{{ item.dest }}"
+        mode: u=rwx,g=rx,o=r
+      loop:
+        - src: cnitool
+          dest: cnitool
+        - src: connect-inject.sh
+          dest: connect-inject
+
+    - name: Create /srv/consul/conf/dns/ directory for CNI network
+      file:
+        state: directory
+        path: /srv/consul/conf/dns/envoynetwork
+
+    - name: Create resolv.conf for CNI network
+      copy:
+        content: "nameserver 192.0.2.1\n"
+        dest: /srv/consul/conf/dns/envoynetwork/resolv.conf
+        mode: u=rw,g=r,o=r
+
+    - name: Copy systemd drop-in template to /srv/consul/conf/
+      copy:
+        src: "systemd-drop-in.template"
+        dest: "/srv/consul/conf/systemd-drop-in.template"
+        mode: u=rwx,g=rx,o=r
+
+    - name: Install unzip
+      package:
+        name: unzip
+        state: present
+
+    - name: Download fake service
+      get_url:
+        url: "https://github.com/nicholasjackson/fake-service/releases/download/v{{ version }}/fake_service_linux_amd64.zip"
+        dest: /tmp/fake_service.zip
+      vars:
+        version: 0.23.1
+
+    - name: Unarchive fake service
+      unarchive:
+        src: /tmp/fake_service.zip
+        remote_src: true
+        dest: /usr/local/bin/
+        creates: /usr/local/bin/fake-service
+        mode: "u=rwx,g=rx,o=rx"
+
+    - name: Create systemd units for api and web services
+      template:
+        src: systemd-fake-service.j2
+        dest: "/etc/systemd/system/{{ item }}.service"
+        mode: u=rw,g=r,o=
+      notify: systemd daemon_reload
+      loop:
+        - api
+        - web
+
+    - name: Create /srv/apps
+      file:
+        path: /srv/apps
+        state: directory
+        mode: u=rwx,g=rx,o=rx
+
+    - name: "Create /srv/apps/{{ item.name }}.env"
+      copy:
+        dest: "/srv/apps/{{ item.name }}.env"
+        content: "{{ item.content }}"
+        mode: u=rw,g=r,o=r
+      loop:
+        - name: api
+          content: |
+            NAME="api"
+            MESSAGE="There are 9,998,383,750,0000 ahead of you. Forwarding to another instance."
+            #UPSTREAM_URIS="http://api2.virtual.consul"
+        - name: web
+          content: |
+            NAME="web"
+            MESSAGE="I am a web server. *Beep boop bop*"
+            UPSTREAM_URIS="http://api.virtual.consul"

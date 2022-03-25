@@ -1,0 +1,16 @@
+---
+collections:
+  - name: git+https://github.com/blake/ansible-collection-consul.git
+    type: git
+    version: '7ab1f2e'
+
+roles:
+  - name: alvistack.containernetworking_plugins
+    version: 5.1.0
+
+  - name: brianshumate.nomad
+    src: git+https://github.com/ansible-community/ansible-nomad.git
+    version: 92d4e33
+
+  - name: geerlingguy.docker
+    version: 4.1.3
